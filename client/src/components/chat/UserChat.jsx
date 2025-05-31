@@ -3,10 +3,15 @@ import { useFetchRecipientUser } from "../../hooks/useFectchRecipient";
 import avatar from "../../assets/avatar.svg";
 import { useContext } from "react";
 import { ChatContext } from "../../context/ChatContext";
-
+import { unreadNotificationsFunction } from "../../utils/unreadNotifications";
 const UserChat = ({ chat, user }) => {
-  const { onlineUsers } = useContext(ChatContext);
+  const { onlineUsers, notifications, markThisUserNotificationAsRead } =
+    useContext(ChatContext);
   const { recipientUser, loading, error } = useFetchRecipientUser(chat, user);
+  const unreadNotifications = unreadNotificationsFunction(notifications);
+  const thisUserNotifications = unreadNotifications.filter(
+    (notification) => notification.senderId === recipientUser?._id
+  );
   if (loading) return <div>Loading...</div>;
   if (error || !recipientUser) return <div>Error or no recipient found</div>;
 
@@ -20,6 +25,11 @@ const UserChat = ({ chat, user }) => {
       gap={3}
       className="user-card align-items-center p-2 justify-content-between"
       role="button"
+      onClick={() => {
+        if (thisUserNotifications.length > 0) {
+          markThisUserNotificationAsRead(thisUserNotifications, notifications);
+        }
+      }}
     >
       <div className="d-flex">
         <div className="me-2">
@@ -32,8 +42,13 @@ const UserChat = ({ chat, user }) => {
       </div>
       <div className="d-flex flex-column align-items-end">
         <div className="date">1/1/2011</div>
-        <div className="this-user-notifications">0</div>
-        <span className={isOnline ? "user-online" : ""}></span>
+        <div
+          className={
+            thisUserNotifications.length > 0 ? "this-user-notifications" : ""
+          }
+        >
+          {thisUserNotifications.length > 0 ? thisUserNotifications.length : ""}
+        </div>
       </div>
     </Stack>
   );

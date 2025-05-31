@@ -130,7 +130,10 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
   const [newMessage, setNewMessage] = useState(null);
   const [socket, setSocket] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
 
+  console.log("notification:", notifications);
   //initial socket
   useEffect(() => {
     const newSocket = io("http://localhost:3000");
@@ -174,94 +177,7 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
     sendEncryptedMessageViaSocket();
   }, [newMessage]);
 
-  // const sendMessageViaWebsocket = useCallback(
-  //   async (textMessage, sender, currentChatId, setTextMessage) => {
-  //     if (socket === null) return;
-  //     if (!textMessage) return console.log("You must type something");
-
-  //     try {
-  //       const recipientId = currentChat?.members?.find(
-  //         (id) => id !== sender?._id
-  //       );
-  //       if (!recipientId) {
-  //         setSendTextMessageError("Không tìm thấy người nhận.");
-  //         return;
-  //       }
-  //       // 1. Sinh AES key (random 256-bit)
-  //       const aesKey = generateAESKey();
-
-  //       // 2. Mã hóa nội dung bằng AES
-  //       const { ciphertext, iv } = await encryptMessageAES(textMessage, aesKey);
-
-  //       // 3. Xác định người nhận (chỉ dùng cho chat 1-1)
-  //       const receiverId = currentChat?.members?.find(
-  //         (id) => id !== sender._id
-  //       );
-
-  //       if (!receiverId) {
-  //         return setSendTextMessageError("Không tìm thấy người nhận.");
-  //       }
-
-  //       // 4. Lấy public key của người nhận từ backend
-  //       const publicKeyRes = await getRequest(
-  //         `${baseUrl}/users/publicKey/${receiverId}`
-  //       );
-
-  //       if (publicKeyRes.error || !publicKeyRes.publicKey) {
-  //         return setSendTextMessageError(
-  //           "Không lấy được public key người nhận."
-  //         );
-  //       }
-
-  //       // 5. Mã hóa AES key bằng public key người nhận và người gửi (Hybrid E2EE)
-  //       const encryptedAESKeyReceiver = await encryptAESKeyWithRSA(
-  //         aesKey,
-  //         publicKeyRes.publicKey
-  //       );
-
-  //       const encryptedAESKeySender = await encryptAESKeyWithRSA(
-  //         aesKey,
-  //         sender.publicKey
-  //       );
-
-  //       // 6. Gửi tin nhắn đã mã hóa
-  //       const messageData = {
-  //         chatId: currentChatId,
-  //         senderId: sender._id,
-  //         ciphertext,
-  //         encryptedAESKeyReceiver,
-  //         encryptedAESKeySender,
-  //         iv,
-  //       };
-
-  //       socket.emit("sendMessage", { ...messageData, recipientId });
-  //       if (res.error) {
-  //         return setSendTextMessageError(res);
-  //       }
-  //       console.log("messageData:", messageData);
-  //       // 7. Cập nhật UI
-  //       setNewMessage(res);
-  //       setMessages((prev) => [
-  //         ...prev,
-  //         {
-  //           ...res,
-  //           text: textMessage,
-  //           ciphertext: undefined,
-  //           encryptedAESKeyReceiver: undefined,
-  //           encryptedAESKeySender: undefined,
-  //           iv: undefined,
-  //         },
-  //       ]);
-
-  //       setTextMessage("");
-  //     } catch (err) {
-  //       console.error("Lỗi mã hóa tin nhắn:", err);
-  //       setSendTextMessageError("Gửi tin nhắn thất bại.");
-  //     }
-  //   },
-  //   [currentChat, setMessages, setNewMessage]
-  // );
-
+  // Socket receive message and notification
   useEffect(() => {
     if (socket === null) return;
 
@@ -315,9 +231,17 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
         setMessages((prev) => [...prev, res]);
       }
     });
-
+    socket.on("getNotification", (res) => {
+      const isChatOpen = currentChat?.members.some((id) => id === res.senderId);
+      if (isChatOpen) {
+        setNotifications((prev) => [{ ...res, isRead: true }, ...prev]);
+      } else {
+        setNotifications((prev) => [res, ...prev]);
+      }
+    });
     return () => {
       socket.off("getMessage");
+      socket.off("getNotification");
     };
   }, [socket, currentChat, privateKey, user]);
 
@@ -507,6 +431,7 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
         return !isChatCreated;
       });
       setPotentialChats(pChats);
+      setAllUsers(response);
     };
     getUsers();
   }, [userChats]);
@@ -545,6 +470,56 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
     return response;
   }, []);
 
+  const markAllNotificationsAsRead = useCallback(() => {
+    setNotifications((prev) =>
+      prev.map((notification) => ({ ...notification, isRead: true }))
+    );
+  }, []);
+
+  const markNotificationAsRead = useCallback(
+    (n, userChats, user, notifications) => {
+      //find chat to open
+
+      const desiredChat = userChats.find((chat) => {
+        const chatMembers = [user._id, n.senderId];
+        const isDesiredChat = chat.members.every((member) =>
+          chatMembers.includes(member)
+        );
+        return isDesiredChat;
+      });
+
+      //mark notification as read
+      const mNotification = notifications.map((el) => {
+        if (n.senderId === el.senderId) {
+          return { ...n, isRead: true };
+        } else {
+          return el;
+        }
+      });
+
+      updateCurrentchat(desiredChat);
+      setNotifications(mNotification);
+    },
+    []
+  );
+
+  const markThisUserNotificationAsRead = useCallback(
+    (thisUserNotifications, notifications) => {
+      const mNotification = notifications.map((el) => {
+        let notification;
+        thisUserNotifications.forEach((n) => {
+          if (n.senderId === el.senderId) {
+            notification = { ...n, isRead: true };
+          } else {
+            notification = el;
+          }
+        });
+        return notification;
+      });
+      setNotifications(mNotification);
+    },
+    []
+  );
   return (
     <ChatContext.Provider
       value={{
@@ -560,6 +535,11 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
         messagesError,
         sendTextMessage,
         onlineUsers,
+        notifications,
+        allUsers,
+        markAllNotificationsAsRead,
+        markNotificationAsRead,
+        markThisUserNotificationAsRead,
       }}
     >
       {children}
