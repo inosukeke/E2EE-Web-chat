@@ -34,7 +34,7 @@ export const AuthContextProvider = ({ children }) => {
     const user = localStorage.getItem("User");
 
     setUser(JSON.parse(user));
-  }, []); // chạy khi render app
+  }, []);
 
   const updateRegisterInfo = useCallback((info) => {
     setRegisterInfo(info);
@@ -199,7 +199,7 @@ export const AuthContextProvider = ({ children }) => {
         }
 
         const { encryptedPrivateKey, salt, iv } = JSON.parse(encryptedDataStr);
-        console.log("iv", iv);
+
         // 1. Convert salt & iv về ArrayBuffer
         const saltBuffer = Uint8Array.from(atob(salt), (c) => c.charCodeAt(0));
         const ivBuffer = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));

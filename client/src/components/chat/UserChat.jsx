@@ -10,8 +10,6 @@ const UserChat = ({ chat, user }) => {
   if (loading) return <div>Loading...</div>;
   if (error || !recipientUser) return <div>Error or no recipient found</div>;
 
-  console.log("UserChat - recipientUser:", recipientUser);
-
   const isOnline = onlineUsers?.some(
     (user) => user?.userId === recipientUser?._id
   );

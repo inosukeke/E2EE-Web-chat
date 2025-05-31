@@ -154,60 +154,25 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
     };
   }, [socket]);
 
-  // //send message
+  //send message
 
-  // useEffect(() => {
-  //   const sendEncryptedMessageViaSocket = async () => {
-  //     if (socket === null || !newMessage || !user || !currentChat) return;
+  useEffect(() => {
+    const sendEncryptedMessageViaSocket = async () => {
+      if (socket === null || !newMessage || !user || !currentChat) return;
 
-  //     const recipientId = currentChat.members?.find((id) => id !== user._id);
-  //     if (!recipientId) return;
+      const recipientId = currentChat.members?.find((id) => id !== user._id);
+      if (!recipientId) return;
 
-  //     try {
-  //       // 1. Sinh AES key
-  //       const aesKey = generateAESKey();
+      try {
+        socket.emit("sendMessage", { ...newMessage, recipientId });
+        console.log("sendMessageSocket");
+      } catch (err) {
+        console.error("Lỗi khi gửi tin nhắn mã hóa qua socket:", err);
+      }
+    };
 
-  //       // 2. Mã hóa nội dung
-  //       const { ciphertext, iv } = await encryptMessageAES(textMessage, aesKey);
-
-  //       // 3. Lấy public key người nhận
-  //       const publicKeyRes = await getRequest(
-  //         `${baseUrl}/users/publicKey/${recipientId}`
-  //       );
-  //       if (publicKeyRes.error || !publicKeyRes.publicKey) {
-  //         return console.error("Không lấy được public key người nhận.");
-  //       }
-
-  //       // 4. Mã hóa AES key
-  //       const encryptedAESKeyReceiver = await encryptAESKeyWithRSA(
-  //         aesKey,
-  //         publicKeyRes.publicKey
-  //       );
-  //       const encryptedAESKeySender = await encryptAESKeyWithRSA(
-  //         aesKey,
-  //         user.publicKey
-  //       );
-
-  //       // 5. Tạo message
-  //       const encryptedMessage = {
-  //         chatId: currentChat._id,
-  //         senderId: user._id,
-  //         ciphertext,
-  //         iv,
-  //         encryptedAESKeyReceiver,
-  //         encryptedAESKeySender,
-  //         recipientId,
-  //       };
-
-  //       // 6. Gửi qua socket
-  //       socket.emit("sendMessage", encryptedMessage);
-  //     } catch (err) {
-  //       console.error("Lỗi khi gửi tin nhắn mã hóa qua socket:", err);
-  //     }
-  //   };
-
-  //   sendEncryptedMessageViaSocket();
-  // }, [newMessage]);
+    sendEncryptedMessageViaSocket();
+  }, [newMessage]);
 
   // const sendMessageViaWebsocket = useCallback(
   //   async (textMessage, sender, currentChatId, setTextMessage) => {
@@ -297,65 +262,64 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
   //   [currentChat, setMessages, setNewMessage]
   // );
 
-  //receive message
-  // useEffect(() => {
-  //   if (socket === null) return;
+  useEffect(() => {
+    if (socket === null) return;
 
-  //   socket.on("getMessage", async (res) => {
-  //     if (currentChat?._id !== res.chatId) return;
+    socket.on("getMessage", async (res) => {
+      if (currentChat?._id !== res.chatId) return;
 
-  //     if (
-  //       res.ciphertext &&
-  //       (res.encryptedAESKeySender || res.encryptedAESKeyReceiver) &&
-  //       res.iv
-  //     ) {
-  //       try {
-  //         const isSender = res.senderId === user._id;
+      if (
+        res.ciphertext &&
+        (res.encryptedAESKeySender || res.encryptedAESKeyReceiver) &&
+        res.iv
+      ) {
+        try {
+          const isSender = res.senderId === user._id;
 
-  //         const encryptedAESKey = isSender
-  //           ? res.encryptedAESKeySender
-  //           : res.encryptedAESKeyReceiver;
+          const encryptedAESKey = isSender
+            ? res.encryptedAESKeySender
+            : res.encryptedAESKeyReceiver;
 
-  //         const aesKey = await decryptAESKeyWithRSA(
-  //           encryptedAESKey,
-  //           privateKey
-  //         );
-  //         const decrypted = await decryptMessageAES(
-  //           res.ciphertext,
-  //           aesKey,
-  //           res.iv
-  //         );
+          const aesKey = await decryptAESKeyWithRSA(
+            encryptedAESKey,
+            privateKey
+          );
+          const decrypted = await decryptMessageAES(
+            res.ciphertext,
+            aesKey,
+            res.iv
+          );
 
-  //         setMessages((prev) => [
-  //           ...prev,
-  //           {
-  //             ...res,
-  //             text: decrypted,
-  //             ciphertext: undefined,
-  //             encryptedAESKeyReceiver: undefined,
-  //             encryptedAESKeySender: undefined,
-  //             iv: undefined,
-  //           },
-  //         ]);
-  //       } catch (err) {
-  //         console.error("Lỗi giải mã socket message:", err);
-  //         setMessages((prev) => [
-  //           ...prev,
-  //           {
-  //             ...res,
-  //             text: "[Không thể giải mã tin nhắn]",
-  //           },
-  //         ]);
-  //       }
-  //     } else {
-  //       setMessages((prev) => [...prev, res]);
-  //     }
-  //   });
+          setMessages((prev) => [
+            ...prev,
+            {
+              ...res,
+              text: decrypted,
+              ciphertext: undefined,
+              encryptedAESKeyReceiver: undefined,
+              encryptedAESKeySender: undefined,
+              iv: undefined,
+            },
+          ]);
+        } catch (err) {
+          console.error("Lỗi giải mã socket message:", err);
+          setMessages((prev) => [
+            ...prev,
+            {
+              ...res,
+              text: "[Không thể giải mã tin nhắn]",
+            },
+          ]);
+        }
+      } else {
+        setMessages((prev) => [...prev, res]);
+      }
+    });
 
-  //   return () => {
-  //     socket.off("getMessage");
-  //   };
-  // }, [socket, currentChat, privateKey, user]);
+    return () => {
+      socket.off("getMessage");
+    };
+  }, [socket, currentChat, privateKey, user]);
 
   const sendTextMessage = useCallback(
     async (textMessage, sender, currentChatId, setTextMessage) => {
@@ -417,6 +381,7 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
         console.log("messageData:", messageData);
         // 7. Cập nhật UI
         setNewMessage(res);
+        console.log("newmessage", newMessage);
         setMessages((prev) => [
           ...prev,
           {

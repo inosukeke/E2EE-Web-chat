@@ -8,16 +8,11 @@ import InputEmoji from "react-input-emoji";
 
 const ChatBox = () => {
   const { user } = useContext(AuthContext);
-  const {
-    currentChat,
-    messages,
-    isMessagesLoading,
-    sendTextMessage,
-    // sendMessageViaWebsocket,
-  } = useContext(ChatContext);
+  const { currentChat, messages, isMessagesLoading, sendTextMessage } =
+    useContext(ChatContext);
   const { recipientUser } = useFetchRecipientUser(currentChat, user);
   const [textMessage, setTextMessage] = useState("");
-  console.log("messages:", messages);
+  console.log("messages", messages);
   if (!recipientUser)
     return (
       <p style={{ textAlign: "center", width: "100%" }}>
@@ -46,7 +41,11 @@ const ChatBox = () => {
                   : "message align-self-start flex-grow-0"
               }`}
             >
-              <span>{message.text}</span>
+              <span>
+                {typeof message.text === "string"
+                  ? message.text
+                  : message.text?.message}
+              </span>
               <span className="message-footer">
                 {moment(message.createdAt).calendar()}
               </span>
@@ -64,12 +63,6 @@ const ChatBox = () => {
           className="send-btn"
           onClick={() => {
             sendTextMessage(textMessage, user, currentChat._id, setTextMessage);
-            // sendMessageViaWebsocket(
-            //   textMessage,
-            //   user,
-            //   currentChat._id,
-            //   setTextMessage
-            // );
           }}
         >
           <svg

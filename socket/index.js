@@ -26,6 +26,12 @@ io.on("connection", (socket) => {
     );
 
     if (user) {
+      console.log(
+        "Server gửi getMessage cho socketId:",
+        user.socketId,
+        "message:",
+        message
+      );
       io.to(user.socketId).emit("getMessage", message);
     }
   });
