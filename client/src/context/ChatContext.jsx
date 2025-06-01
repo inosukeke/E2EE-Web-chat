@@ -136,7 +136,7 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
   console.log("notification:", notifications);
   //initial socket
   useEffect(() => {
-    const newSocket = io("http://localhost:3000");
+    const newSocket = io(import.meta.env.VITE_SOCKET_URL);
     setSocket(newSocket);
 
     return () => {
