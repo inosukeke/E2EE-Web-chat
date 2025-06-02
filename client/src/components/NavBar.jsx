@@ -1,10 +1,19 @@
 import { Container, Nav, Navbar, Stack } from "react-bootstrap";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import Notification from "./chat/Notification";
+
 const MyNavBar = () => {
   const { user, logoutUser, privateKey } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  const handleLogout = async (e) => {
+    e.preventDefault();
+    await logoutUser();
+    navigate("/login");
+  };
+
   return (
     <Navbar bg="dark" className="mb-4" style={{ height: "3.75rem" }}>
       <Container>
@@ -22,7 +31,7 @@ const MyNavBar = () => {
               <>
                 <Notification />
                 <Link
-                  onClick={() => logoutUser()}
+                  onClick={handleLogout}
                   to="/login"
                   className="link-light text-decoration-none"
                 >
