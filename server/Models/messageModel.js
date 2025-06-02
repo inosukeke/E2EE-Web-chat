@@ -8,7 +8,7 @@ const messageSchema = new mongoose.Schema(
     encryptedAESKeyReceiver: String,
     encryptedAESKeySender: String,
     iv: String,
-    signature: {
+    signature: String,
   },
   {
     timestamps: true,
