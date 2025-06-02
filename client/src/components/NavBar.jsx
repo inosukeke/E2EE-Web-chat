@@ -18,7 +18,7 @@ const MyNavBar = () => {
         )}
         <Nav>
           <Stack direction="horizontal" gap={3}>
-            {user && (
+            {user && privateKey && (
               <>
                 <Notification />
                 <Link
@@ -31,7 +31,7 @@ const MyNavBar = () => {
               </>
             )}
 
-            {!user && (
+            {(!user || !privateKey) && (
               <>
                 <Link to="/login" className="link-light text-decoration-none">
                   Login
