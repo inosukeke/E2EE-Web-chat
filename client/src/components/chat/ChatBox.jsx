@@ -5,6 +5,7 @@ import { useFetchRecipientUser } from "../../hooks/useFectchRecipient";
 import { Stack } from "react-bootstrap";
 import moment from "moment";
 import InputEmoji from "react-input-emoji";
+import SignatureStatus from "./SignatureStatus";
 
 const ChatBox = () => {
   const { user } = useContext(AuthContext);
@@ -46,11 +47,14 @@ const ChatBox = () => {
               }`}
               ref={scroll}
             >
-              <span>
-                {typeof message.text === "string"
-                  ? message.text
-                  : message.text?.message}
-              </span>
+              <div className="d-flex align-items-center">
+                <span>
+                  {typeof message.text === "string"
+                    ? message.text
+                    : message.text?.message}
+                </span>
+                <SignatureStatus isValid={message.isSignatureValid} />
+              </div>
               <span className="message-footer">
                 {moment(message.createdAt).calendar()}
               </span>
