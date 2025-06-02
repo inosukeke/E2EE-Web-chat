@@ -22,10 +22,7 @@ function App() {
             path="/register"
             element={user && privateKey ? <Chat /> : <Register />}
           />
-          <Route
-            path="/login"
-            element={user && privateKey ? <Chat /> : <Login />}
-          />
+          <Route path="/login" element={<Login />} />
           <Route path="/*" element={<Navigate to="/" />} />
         </Routes>
       </Container>
