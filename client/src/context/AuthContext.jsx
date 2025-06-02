@@ -260,21 +260,17 @@ export const AuthContextProvider = ({ children }) => {
   );
 
   const logoutUser = useCallback(() => {
-    // Lưu email trước khi xóa user
-    const userEmail = user?.email;
+    try {
+      // Xóa thông tin người dùng trong localStorage
+      localStorage.removeItem("User");
 
-    // Xóa thông tin người dùng và private key trong localStorage
-    localStorage.removeItem("User");
-
-    // Chỉ xóa EncryptedPrivateKey nếu có email
-    if (userEmail) {
-      localStorage.removeItem(`EncryptedPrivateKey_${userEmail}`);
+      // Xóa state và context liên quan
+      setPrivateKey(null);
+      setUser(null);
+    } catch (error) {
+      console.error("Logout failed:", error);
     }
-
-    // Xóa state và context liên quan
-    setPrivateKey(null);
-    setUser(null);
-  }, [user]);
+  }, []);
 
   return (
     <AuthContext.Provider

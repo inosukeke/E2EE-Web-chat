@@ -11,10 +11,8 @@ const MyNavBar = () => {
   const handleLogout = async (e) => {
     e.preventDefault();
     try {
-      await logoutUser();
-      setTimeout(() => {
-        navigate("/login", { replace: true });
-      }, 100);
+      logoutUser();
+      navigate("/login", { replace: true });
     } catch (error) {
       console.error("Logout failed:", error);
     }
