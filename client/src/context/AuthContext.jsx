@@ -260,14 +260,21 @@ export const AuthContextProvider = ({ children }) => {
   );
 
   const logoutUser = useCallback(() => {
+    // Lưu email trước khi xóa user
+    const userEmail = user?.email;
+
     // Xóa thông tin người dùng và private key trong localStorage
     localStorage.removeItem("User");
-    localStorage.removeItem(`EncryptedPrivateKey_${user.email}`);
+
+    // Chỉ xóa EncryptedPrivateKey nếu có email
+    if (userEmail) {
+      localStorage.removeItem(`EncryptedPrivateKey_${userEmail}`);
+    }
 
     // Xóa state và context liên quan
     setPrivateKey(null);
     setUser(null);
-  }, []);
+  }, [user]);
 
   return (
     <AuthContext.Provider
