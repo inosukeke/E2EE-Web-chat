@@ -1,11 +1,16 @@
 // Hàm chuyển đổi base64 sang ArrayBuffer
 export function base64ToArrayBuffer(base64) {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+  try {
+    const binaryString = window.atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch (error) {
+    console.error("Error in base64ToArrayBuffer:", error);
+    throw error;
   }
-  return bytes.buffer;
 }
 
 // Hàm chuyển đổi PEM sang ArrayBuffer
@@ -29,11 +34,21 @@ export function pemToArrayBuffer(pem) {
 
 // Hàm chuyển đổi ArrayBuffer sang base64
 export function arrayBufferToBase64(buffer) {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  try {
+    return window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  } catch (error) {
+    console.error("Error in arrayBufferToBase64:", error);
+    throw error;
+  }
 }
 
 export function convertToPem(buffer, label) {
-  const base64 = window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
-  const formatted = base64.match(/.{1,64}/g).join("\n");
-  return `-----BEGIN ${label}-----\n${formatted}\n-----END ${label}-----`;
+  try {
+    const base64 = window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    const formatted = base64.match(/.{1,64}/g).join("\n");
+    return `-----BEGIN ${label}-----\n${formatted}\n-----END ${label}-----`;
+  } catch (error) {
+    console.error("Error in convertToPem:", error);
+    throw error;
+  }
 }
