@@ -14,7 +14,7 @@ const ChatBox = () => {
   const { recipientUser } = useFetchRecipientUser(currentChat, user);
   const [textMessage, setTextMessage] = useState("");
   const scroll = useRef();
-  console.log("messages", messages);
+
   useEffect(() => {
     scroll.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);

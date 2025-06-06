@@ -28,7 +28,6 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
   const [notifications, setNotifications] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
 
-  console.log("notification:", notifications);
   //initial socket
   useEffect(() => {
     const newSocket = io(import.meta.env.VITE_SOCKET_URL);
