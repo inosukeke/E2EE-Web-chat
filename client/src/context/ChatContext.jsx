@@ -28,7 +28,6 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
   const [notifications, setNotifications] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
 
-  console.log("notification:", notifications);
   //initial socket
   useEffect(() => {
     const newSocket = io(import.meta.env.VITE_SOCKET_URL);
@@ -79,12 +78,11 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
     socket.on("getMessage", async (res) => {
       if (currentChat?._id !== res.chatId) return;
 
-      console.log("[Socket] Received message details:", {
+      console.log("[Receive] New message received:", {
         chatId: res.chatId,
         senderId: res.senderId,
+        hasEncryptedContent: !!res.ciphertext,
         hasSignature: !!res.signature,
-        signatureValue: res.signature,
-        messageFields: Object.keys(res),
       });
 
       if (
@@ -94,16 +92,14 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
       ) {
         try {
           const isSender = res.senderId === user._id;
-          console.log("[Receive] Message processing:", {
+          console.log("[Decrypt] Starting decryption process:", {
             isSender,
-            senderId: res.senderId,
             userId: user._id,
-            hasEncryptedKey: !!(isSender
-              ? res.encryptedAESKeySender
-              : res.encryptedAESKeyReceiver),
+            senderId: res.senderId,
           });
 
           // 1. Giải mã AES key
+          console.log("[Decrypt] Decrypting AES key...");
           const encryptedAESKey = isSender
             ? res.encryptedAESKeySender
             : res.encryptedAESKeyReceiver;
@@ -112,47 +108,48 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
             encryptedAESKey,
             privateKey
           );
+          console.log("[Decrypt] AES key decrypted successfully");
 
           // 2. Giải mã nội dung
+          console.log("[Decrypt] Decrypting message content...");
           const decrypted = await decryptMessageAES(
             res.ciphertext,
             aesKey,
             res.iv
           );
-
           console.log("[Decrypt] Message decrypted:", {
-            success: true,
             messageLength: decrypted.message.length,
-            messagePreview: decrypted.message.substring(0, 10) + "...",
+            messagePreview: decrypted.message.substring(0, 20) + "...",
           });
 
-          // 3. Xác thực chữ ký với nội dung đã giải mã
+          // 3. Xác thực chữ ký
+          console.log("[Verify] Starting signature verification...");
           let isSignatureValid = false;
           try {
             if (isSender) {
               isSignatureValid = true;
-              console.log("[Verify] Sender's own message - auto verified");
+              console.log(
+                "[Verify] Sender's own message - skipping verification"
+              );
             } else {
-              // Tìm sender trong allUsers hoặc gọi API để lấy public key
               let senderPublicKey;
               const sender = allUsers.find((u) => u._id === res.senderId);
-              console.log("[Verify] Looking for sender:", {
-                senderId: res.senderId,
-                foundInCache: !!sender,
-                allUserIds: allUsers.map((u) => u._id),
-              });
 
               if (sender) {
                 senderPublicKey = sender.publicKey;
                 console.log("[Verify] Found sender's public key in cache");
               } else {
-                console.log("[Verify] Fetching sender's public key from API");
+                console.log(
+                  "[Verify] Fetching sender's public key from server..."
+                );
                 const publicKeyRes = await getRequest(
                   `${baseUrl}/users/publicKey/${res.senderId}`
                 );
                 if (!publicKeyRes.error) {
                   senderPublicKey = publicKeyRes.publicKey;
-                  console.log("[Verify] Got public key from API");
+                  console.log(
+                    "[Verify] Retrieved sender's public key from server"
+                  );
                 } else {
                   console.error(
                     "[Verify] Failed to get public key:",
@@ -161,50 +158,27 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
                 }
               }
 
-              console.log("[Verify] Verification preparation:", {
-                hasSignature: !!res.signature,
-                signatureLength: res.signature?.length,
-                hasPublicKey: !!senderPublicKey,
-                publicKeyPreview: senderPublicKey
-                  ? senderPublicKey.substring(0, 20) + "..."
-                  : null,
-                messageToVerify: decrypted.message.substring(0, 10) + "...",
-              });
-
               if (res.signature && senderPublicKey) {
-                console.log(
-                  "[Verify] Attempting signature verification with:",
-                  {
-                    messageToVerify: decrypted.message,
-                    signatureLength: res.signature.length,
-                    publicKeyLength: senderPublicKey.length,
-                  }
-                );
-
+                console.log("[Verify] Verifying signature...");
                 isSignatureValid = await verifySignature(
-                  decrypted.message, // Sử dụng nội dung đã giải mã
+                  decrypted.message,
                   res.signature,
                   senderPublicKey
                 );
-
-                console.log("[Verify] Verification completed:", {
-                  isValid: isSignatureValid,
-                  messageLength: decrypted.message.length,
-                  signatureLength: res.signature.length,
-                });
+                console.log(
+                  "[Verify] Signature verification result:",
+                  isSignatureValid
+                );
               } else {
-                console.log("[Verify] Cannot verify - missing data:", {
-                  hasSignature: !!res.signature,
-                  hasPublicKey: !!senderPublicKey,
-                });
+                console.warn(
+                  "[Verify] Cannot verify - missing signature or public key"
+                );
               }
             }
           } catch (signError) {
-            console.error("[Verify] Verification error:", {
+            console.error("[Verify] Signature verification failed:", {
               error: signError.message,
               stack: signError.stack,
-              messageLength: decrypted?.message?.length,
-              signaturePresent: !!res.signature,
             });
             isSignatureValid = false;
           }
@@ -216,26 +190,21 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
             signature: res.signature,
           };
 
-          console.log("[Message] Final processing state:", {
-            isSender,
+          console.log("[Receive] Processing completed:", {
             isSignatureValid,
-            hasSignature: !!newMessage.signature,
-            messagePreview: newMessage.text.substring(0, 10) + "...",
-            originalSignature: !!res.signature,
-            finalSignature: !!newMessage.signature,
+            messageLength: newMessage.text.length,
+            messagePreview: newMessage.text.substring(0, 20) + "...",
           });
 
           setMessages((prev) => [...prev, newMessage]);
         } catch (err) {
-          console.error("[Error] Message processing failed:", {
+          console.error("[Receive] Failed to process message:", {
             error: err.message,
             stack: err.stack,
-            messageData: {
-              chatId: res.chatId,
-              senderId: res.senderId,
-              hasSignature: !!res.signature,
-            },
+            chatId: res.chatId,
+            senderId: res.senderId,
           });
+
           setMessages((prev) => [
             ...prev,
             {
@@ -246,16 +215,13 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
           ]);
         }
       } else {
-        console.log(
-          "[Message] Skipping decryption - missing required fields:",
-          {
-            hasCiphertext: !!res.ciphertext,
-            hasEncryptedKey: !!(
-              res.encryptedAESKeySender || res.encryptedAESKeyReceiver
-            ),
-            hasIV: !!res.iv,
-          }
-        );
+        console.warn("[Receive] Message missing required encryption fields:", {
+          hasCiphertext: !!res.ciphertext,
+          hasEncryptedKey: !!(
+            res.encryptedAESKeySender || res.encryptedAESKeyReceiver
+          ),
+          hasIV: !!res.iv,
+        });
         setMessages((prev) => [...prev, { ...res, isSignatureValid: false }]);
       }
     });
@@ -385,22 +351,34 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
       if (!textMessage) return console.log("You must type something");
 
       try {
-        console.log("[Send] Starting to send message");
+        console.log("[Send] Starting message encryption process...");
+        console.log("[Send] Message details:", {
+          chatId: currentChatId,
+          senderId: sender._id,
+          messageLength: textMessage.length,
+          messagePreview: textMessage.substring(0, 20) + "...",
+        });
 
         // 1. Tạo chữ ký số cho tin nhắn
+        console.log("[Send] Creating digital signature...");
         const signature = await signMessage(textMessage, privateKey);
-        console.log("[Send] Created signature:", !!signature);
-        console.log("[Send] Signature details:", {
-          exists: !!signature,
-          length: signature?.length,
-          value: signature?.substring(0, 50) + "...",
+        console.log("[Send] Signature created:", {
+          signatureLength: signature.length,
+          signaturePreview: signature.substring(0, 50) + "...",
         });
 
         // 2. Sinh AES key (random 256-bit)
+        console.log("[Send] Generating AES key...");
         const aesKey = generateAESKey();
+        console.log("[Send] AES key generated");
 
         // 3. Mã hóa nội dung bằng AES
+        console.log("[Send] Encrypting message with AES...");
         const { ciphertext, iv } = await encryptMessageAES(textMessage, aesKey);
+        console.log("[Send] Message encrypted:", {
+          ciphertextLength: ciphertext.length,
+          ivLength: iv.length,
+        });
 
         // 4. Xác định người nhận
         const receiverId = currentChat?.members?.find(
@@ -408,23 +386,30 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
         );
 
         if (!receiverId) {
+          console.error("[Send] Receiver not found in chat members");
           return setSendTextMessageError("Không tìm thấy người nhận.");
         }
+        console.log("[Send] Receiver identified:", receiverId);
 
         // 5. Lấy public key của người nhận
+        console.log("[Send] Fetching receiver's public key...");
         const publicKeyRes = await getRequest(
           `${baseUrl}/users/publicKey/${receiverId}`
         );
 
         if (publicKeyRes.error || !publicKeyRes.publicKey) {
+          console.error(
+            "[Send] Failed to get receiver's public key:",
+            publicKeyRes.error
+          );
           return setSendTextMessageError(
             "Không lấy được public key người nhận."
           );
         }
+        console.log("[Send] Received public key successfully");
 
-        console.log("[Send] Got receiver's public key");
-
-        // 6. Mã hóa AES key
+        // 6. Mã hóa AES key cho cả người gửi và người nhận
+        console.log("[Send] Encrypting AES key for both parties...");
         const encryptedAESKeyReceiver = await encryptAESKeyWithRSA(
           aesKey,
           publicKeyRes.publicKey
@@ -434,8 +419,10 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
           aesKey,
           sender.publicKey
         );
+        console.log("[Send] AES key encrypted for both parties");
 
         // 7. Gửi tin nhắn với chữ ký số
+        console.log("[Send] Preparing message data for sending...");
         const messageData = {
           chatId: currentChatId,
           senderId: sender._id,
@@ -446,22 +433,11 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
           signature,
         };
 
-        console.log("[Client] Sending message data:", {
-          hasSignature: !!messageData.signature,
-          signatureLength: messageData.signature?.length,
-          messageFields: Object.keys(messageData),
-          signatureValue: messageData.signature?.substring(0, 50) + "...",
-        });
-
+        console.log("[Send] Sending encrypted message to server...");
         const res = await postRequest(`${baseUrl}/messages`, messageData);
 
-        console.log("[Client] Received response:", {
-          hasSignature: !!res.signature,
-          responseFields: Object.keys(res),
-          signatureValue: res.signature?.substring(0, 50) + "...",
-        });
-
         if (res.error) {
+          console.error("[Send] Failed to send message:", res.error);
           return setSendTextMessageError(res);
         }
 
@@ -471,19 +447,19 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
           ...res,
           text: textMessage,
           isSignatureValid: true,
-          signature: res.signature, // Explicitly set signature
+          signature: res.signature,
         };
 
-        console.log("[Client] Created new message:", {
-          hasSignature: !!newMessage.signature,
-          messageFields: Object.keys(newMessage),
-          signatureValue: newMessage.signature?.substring(0, 50) + "...",
-        });
         setNewMessage(newMessage);
         setMessages((prev) => [...prev, newMessage]);
         setTextMessage("");
+
+        console.log("[Send] Local message state updated");
       } catch (err) {
-        console.error("[Error] Failed to send message:", err);
+        console.error("[Send] Critical error while sending message:", {
+          error: err.message,
+          stack: err.stack,
+        });
         setSendTextMessageError("Gửi tin nhắn thất bại.");
       }
     },
