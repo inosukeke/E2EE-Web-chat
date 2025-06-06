@@ -29,8 +29,26 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
   const [notifications, setNotifications] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
 
+  // Reset all chat data when user changes
+  useEffect(() => {
+    if (!user) {
+      setUserChats(null);
+      setCurrentChat(null);
+      setMessages([]);
+      setPotentialChats([]);
+      setAllUsers([]);
+      setNotifications([]);
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+      }
+    }
+  }, [user, socket]);
+
   //initial socket
   useEffect(() => {
+    if (!user?._id) return;
+
     const newSocket = io(import.meta.env.VITE_SOCKET_URL);
     setSocket(newSocket);
 
@@ -486,48 +504,82 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
   // Lấy danh sách người dùng chưa trò chuyện
   useEffect(() => {
     const getUsers = async () => {
-      const response = await getRequest(`${baseUrl}/users`);
-
-      if (response.error) {
-        return console.log("Error fetching users", response);
+      if (!user?._id) {
+        setPotentialChats([]);
+        setAllUsers([]);
+        return;
       }
-      const pChats = response.filter((u) => {
-        let isChatCreated = false;
 
-        if (user?._id === u._id) return false;
+      try {
+        const response = await getRequest(`${baseUrl}/users`);
 
-        if (userChats) {
-          isChatCreated = userChats?.some((chat) => {
-            return chat.members[0] === u._id || chat.members[1] === u._id;
-          });
+        if (response.error) {
+          console.error("Error fetching users:", response);
+          return;
         }
 
-        return !isChatCreated;
-      });
-      setPotentialChats(pChats);
-      setAllUsers(response);
+        // Filter out the current user and users already in chats
+        const pChats = response.filter((u) => {
+          if (u._id === user._id) return false;
+
+          if (userChats) {
+            const isChatCreated = userChats.some((chat) =>
+              chat.members.includes(u._id)
+            );
+            return !isChatCreated;
+          }
+
+          return true;
+        });
+
+        setPotentialChats(pChats);
+        setAllUsers(response);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
     };
+
     getUsers();
-  }, [userChats]);
+  }, [userChats, user]);
 
   useEffect(() => {
     const getUserChats = async () => {
-      if (user?._id) {
-        setIsUserChatsLoading(true);
-        setUserChatsError(null);
+      if (!user?._id) {
+        setUserChats(null);
+        return;
+      }
 
+      setIsUserChatsLoading(true);
+      setUserChatsError(null);
+
+      try {
         const response = await getRequest(`${baseUrl}/chats/${user?._id}`);
         setIsUserChatsLoading(false);
 
         if (response.error) {
-          return setUserChatsError(response);
+          setUserChatsError(response);
+          setUserChats(null);
+          return;
         }
 
-        setUserChats(response);
+        // Ensure we only get chats that include the current user
+        const filteredChats = response.filter((chat) =>
+          chat.members.includes(user._id)
+        );
+
+        setUserChats(filteredChats);
+      } catch (error) {
+        console.error("Error fetching user chats:", error);
+        setUserChatsError({ message: "Failed to load chats" });
+        setUserChats(null);
+      } finally {
+        setIsUserChatsLoading(false);
       }
     };
+
     getUserChats();
   }, [user]);
+
   const updateCurrentchat = useCallback((chat) => {
     setCurrentChat(chat);
   }, []);
