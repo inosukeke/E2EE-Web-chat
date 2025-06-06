@@ -2,6 +2,7 @@ import { createContext, useState, useEffect, useCallback } from "react";
 import { baseUrl, getRequest, postRequest } from "../utils/services";
 import { io } from "socket.io-client";
 import { signMessage, verifySignature } from "../utils/digitalSignature";
+import { base64ToArrayBuffer } from "../utils/cryptoUtils";
 import {
   generateAESKey,
   encryptMessageAES,
@@ -389,9 +390,7 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
         const { ciphertext, iv } = await encryptMessageAES(textMessage, aesKey);
         console.log("[Send] Dữ liệu đã mã hóa:", {
           ciphertext: ciphertext,
-          iv: Array.from(new Uint8Array(base64ToArrayBuffer(iv)))
-            .map((b) => b.toString(16).padStart(2, "0"))
-            .join(""),
+          iv: iv, // Just log the base64 string directly
         });
 
         // 4. Xác định người nhận
