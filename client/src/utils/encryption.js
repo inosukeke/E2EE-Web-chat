@@ -24,25 +24,41 @@ export async function generateAESKey() {
 // Mã hóa nội dung bằng AES (GCM mode)
 export async function encryptMessageAES(message, aesKey) {
   try {
-    const iv = window.crypto.getRandomValues(new Uint8Array(12)); // IV 96-bit
-    const encoded = new TextEncoder().encode(message);
+    // Ensure we have a valid key
+    if (!(aesKey instanceof CryptoKey)) {
+      throw new Error("Invalid AES key format");
+    }
 
+    // Generate a random IV
+    const iv = window.crypto.getRandomValues(new Uint8Array(12)); // IV 96-bit
+
+    // Encode the message
+    const encoder = new TextEncoder();
+    const encoded = encoder.encode(message);
+
+    // Encrypt the message
     const ciphertext = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
+      {
+        name: "AES-GCM",
+        iv: iv,
+        tagLength: 128,
+      },
       aesKey,
       encoded
     );
 
-    // Export the AES key for storage/transmission
-    const exportedKey = await window.crypto.subtle.exportKey("raw", aesKey);
-
+    // Convert results to base64
     return {
       ciphertext: arrayBufferToBase64(ciphertext),
       iv: arrayBufferToBase64(iv),
-      exportedKey: arrayBufferToBase64(exportedKey),
     };
   } catch (error) {
-    console.error("Error in encryptMessageAES:", error);
+    console.error("Error in encryptMessageAES:", {
+      error: error.message,
+      stack: error.stack,
+      keyType: aesKey instanceof CryptoKey ? "CryptoKey" : typeof aesKey,
+      messageType: typeof message,
+    });
     throw error;
   }
 }
@@ -76,6 +92,11 @@ export async function encryptAESKeyWithRSA(aesKey, receiverPublicKeyPem) {
 
 export async function decryptMessageAES(ciphertext, aesKey, iv) {
   try {
+    // Ensure we have all required parameters
+    if (!ciphertext || !aesKey || !iv) {
+      throw new Error("Missing required parameters for decryption");
+    }
+
     // If aesKey is an ArrayBuffer, import it first
     let key = aesKey;
     if (aesKey instanceof ArrayBuffer) {
@@ -88,24 +109,39 @@ export async function decryptMessageAES(ciphertext, aesKey, iv) {
       );
     }
 
+    // Ensure we have a valid CryptoKey
+    if (!(key instanceof CryptoKey)) {
+      throw new Error("Invalid AES key format");
+    }
+
     // Convert base64 strings to ArrayBuffer
     const ivBuffer = base64ToArrayBuffer(iv);
     const ciphertextBuffer = base64ToArrayBuffer(ciphertext);
 
+    // Decrypt the content
     const decryptedContent = await window.crypto.subtle.decrypt(
       {
         name: "AES-GCM",
         iv: new Uint8Array(ivBuffer),
+        tagLength: 128,
       },
       key,
       ciphertextBuffer
     );
 
-    return { message: new TextDecoder().decode(decryptedContent) };
+    // Decode the decrypted content
+    const decoder = new TextDecoder();
+    const message = decoder.decode(decryptedContent);
+
+    return { message };
   } catch (error) {
     console.error("Error in decryptMessageAES:", {
       error: error.message,
       stack: error.stack,
+      hasCiphertext: !!ciphertext,
+      hasKey: !!aesKey,
+      hasIV: !!iv,
+      keyType: aesKey instanceof CryptoKey ? "CryptoKey" : typeof aesKey,
     });
     throw error;
   }
