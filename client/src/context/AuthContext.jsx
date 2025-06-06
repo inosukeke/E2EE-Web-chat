@@ -1,11 +1,6 @@
 import { createContext, useCallback, useEffect, useState } from "react";
 import { baseUrl, postRequest } from "../utils/services";
-
-function convertToPem(buffer, label) {
-  const base64 = window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
-  const formatted = base64.match(/.{1,64}/g).join("\n");
-  return `-----BEGIN ${label}-----\n${formatted}\n-----END ${label}-----`;
-}
+import { convertToPem } from "../utils/cryptoUtils";
 
 export const AuthContext = createContext();
 
@@ -51,10 +46,17 @@ export const AuthContextProvider = ({ children }) => {
       setRegisterError(null);
 
       try {
-        console.log("[Register] Starting registration process...");
+        console.log("[Register] ===== BẮT ĐẦU QUÁ TRÌNH ĐĂNG KÝ =====");
 
         // 1. Tạo cặp khóa RSA
-        console.log("[Register] Generating RSA key pair (2048 bits)...");
+        console.log("[Register] Đang tạo cặp khóa RSA...");
+        console.log("[Register] Thông số RSA:", {
+          algorithm: "RSA-OAEP",
+          modulusLength: "2048 bits",
+          publicExponent: "65537 (0x010001)",
+          hashAlgorithm: "SHA-256",
+        });
+
         const keyPair = await window.crypto.subtle.generateKey(
           {
             name: "RSA-OAEP",
@@ -65,10 +67,10 @@ export const AuthContextProvider = ({ children }) => {
           true,
           ["encrypt", "decrypt"]
         );
-        console.log("[Register] RSA key pair generated successfully");
+        console.log("[Register] Đã tạo thành công cặp khóa RSA");
 
         // 2. Export khóa công khai và riêng tư
-        console.log("[Register] Exporting keys to PEM format...");
+        console.log("[Register] Đang chuyển đổi khóa sang định dạng PEM...");
         const publicKeyBuffer = await window.crypto.subtle.exportKey(
           "spki",
           keyPair.publicKey
@@ -80,22 +82,39 @@ export const AuthContextProvider = ({ children }) => {
 
         const publicKeyPem = convertToPem(publicKeyBuffer, "PUBLIC KEY");
         const privateKeyPem = convertToPem(privateKeyBuffer, "PRIVATE KEY");
-        console.log("[Register] Keys exported successfully:", {
-          publicKeyLength: publicKeyPem.length,
-          privateKeyLength: privateKeyPem.length,
+
+        console.log("[Register] Thông tin khóa:", {
+          publicKeyFormat: "SPKI (SubjectPublicKeyInfo)",
+          privateKeyFormat: "PKCS#8",
+          publicKeyLength: publicKeyPem.length + " bytes",
+          privateKeyLength: privateKeyPem.length + " bytes",
+          publicKeyPreview: publicKeyPem.substring(0, 64) + "...",
         });
 
-        // 3. Tạo salt và iv ngẫu nhiên
-        console.log("[Register] Generating cryptographic parameters...");
+        // 3. Tạo salt và iv
+        console.log("[Register] Đang tạo salt và IV...");
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        console.log("[Register] Generated parameters:", {
-          saltLength: salt.length,
-          ivLength: iv.length,
+        console.log("[Register] Thông số bảo mật:", {
+          saltLength: salt.length * 8 + " bits",
+          ivLength: iv.length * 8 + " bits",
+          saltHex: Array.from(salt)
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join(""),
+          ivHex: Array.from(iv)
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join(""),
         });
 
-        // 4. Derive AES key từ mật khẩu + salt
-        console.log("[Register] Deriving encryption key from password...");
+        // 4. Derive AES key
+        console.log("[Register] Đang tạo khóa AES từ mật khẩu...");
+        console.log("[Register] Thông số PBKDF2:", {
+          iterations: "100,000",
+          hashFunction: "SHA-256",
+          derivedKeyLength: "256 bits",
+          saltLength: "128 bits",
+        });
+
         const passwordBuffer = new TextEncoder().encode(registerInfo.password);
         const keyMaterial = await window.crypto.subtle.importKey(
           "raw",
@@ -116,10 +135,10 @@ export const AuthContextProvider = ({ children }) => {
           true,
           ["encrypt"]
         );
-        console.log("[Register] Key derivation completed");
+        console.log("[Register] Đã tạo thành công khóa AES");
 
-        // 5. Mã hóa private key với AES-GCM
-        console.log("[Register] Encrypting private key...");
+        // 5. Mã hóa private key
+        console.log("[Register] Đang mã hóa private key...");
         const privateKeyData = new TextEncoder().encode(privateKeyPem);
         const encryptedPrivateKeyBuffer = await window.crypto.subtle.encrypt(
           {
@@ -129,13 +148,14 @@ export const AuthContextProvider = ({ children }) => {
           aesKey,
           privateKeyData
         );
-        console.log("[Register] Private key encrypted:", {
-          originalLength: privateKeyData.length,
-          encryptedLength: encryptedPrivateKeyBuffer.byteLength,
+        console.log("[Register] Kết quả mã hóa private key:", {
+          originalSize: privateKeyData.length + " bytes",
+          encryptedSize: encryptedPrivateKeyBuffer.byteLength + " bytes",
+          algorithm: "AES-GCM 256-bit",
         });
 
         // 6. Gửi thông tin đăng ký
-        console.log("[Register] Sending registration data to server...");
+        console.log("[Register] Đang gửi thông tin đăng ký lên server...");
         const newUser = {
           name: registerInfo.name,
           email: registerInfo.email,
@@ -150,13 +170,13 @@ export const AuthContextProvider = ({ children }) => {
 
         setIsRegisterLoading(false);
         if (response.error) {
-          console.error("[Register] Registration failed:", response.error);
+          console.error("[Register] Đăng ký thất bại:", response.error);
           return setRegisterError(response);
         }
-        console.log("[Register] Server registration successful");
+        console.log("[Register] Đăng ký thành công trên server");
 
         // 7. Lưu encrypted private key
-        console.log("[Register] Preparing to store encrypted private key...");
+        console.log("[Register] Đang lưu khóa riêng tư đã mã hóa...");
         const encryptedPrivateKeyBase64 = window.btoa(
           String.fromCharCode(...new Uint8Array(encryptedPrivateKeyBuffer))
         );
@@ -174,18 +194,18 @@ export const AuthContextProvider = ({ children }) => {
             "EncryptedPrivateKey_" + newUser.email,
             JSON.stringify(encryptedData)
           );
-          console.log("[Register] Encrypted private key stored successfully");
+          console.log("[Register] Đã lưu khóa riêng tư đã mã hóa");
         } catch (e) {
-          console.error("[Register] Failed to store encrypted private key:", e);
+          console.error("[Register] Lỗi khi lưu khóa riêng tư:", e);
         }
 
         // 8. Hoàn tất đăng ký
-        console.log("[Register] Registration completed successfully");
+        console.log("[Register] ===== HOÀN TẤT ĐĂNG KÝ =====");
         setUser(response);
         setPrivateKey(privateKeyPem);
         localStorage.setItem("User", JSON.stringify(response));
       } catch (error) {
-        console.error("[Register] Critical error during registration:", {
+        console.error("[Register] Lỗi trong quá trình đăng ký:", {
           error: error.message,
           stack: error.stack,
         });
@@ -203,55 +223,52 @@ export const AuthContextProvider = ({ children }) => {
       setLoginError(null);
 
       try {
-        console.log("[Login] Starting login process...");
+        console.log("[Login] ===== BẮT ĐẦU QUÁ TRÌNH ĐĂNG NHẬP =====");
 
-        // 1. Xác thực với server
-        console.log("[Login] Authenticating with server...");
+        console.log("[Login] Đang xác thực với server...");
         const response = await postRequest(`${baseUrl}/users/login`, loginInfo);
 
         setIsLoginLoading(false);
 
         if (response.error) {
-          console.error(
-            "[Login] Server authentication failed:",
-            response.error
-          );
+          console.error("[Login] Xác thực thất bại:", response.error);
           return setLoginError(response);
         }
-        console.log("[Login] Server authentication successful");
+        console.log("[Login] Xác thực thành công");
 
-        // 2. Lưu thông tin user
         localStorage.setItem("User", JSON.stringify(response));
         setUser(response);
 
-        // 3. Lấy encrypted private key
-        console.log("[Login] Retrieving encrypted private key...");
+        console.log("[Login] Đang lấy khóa riêng tư đã mã hóa...");
         const encryptedDataStr = localStorage.getItem(
           `EncryptedPrivateKey_${response.email}`
         );
 
         if (!encryptedDataStr) {
-          console.error(
-            "[Login] Encrypted private key not found for user:",
-            response.email
-          );
           throw new Error("Không tìm thấy khóa riêng tư đã mã hóa");
         }
 
         const { encryptedPrivateKey, salt, iv } = JSON.parse(encryptedDataStr);
-        console.log("[Login] Retrieved encrypted data:", {
-          hasEncryptedKey: !!encryptedPrivateKey,
-          hasSalt: !!salt,
-          hasIV: !!iv,
+        console.log("[Login] Thông tin mã hóa:", {
+          encryptedKeyLength: encryptedPrivateKey.length + " bytes",
+          saltLength: salt.length + " bytes",
+          ivLength: iv.length + " bytes",
         });
 
-        // 4. Chuẩn bị giải mã
-        console.log("[Login] Preparing decryption parameters...");
+        console.log("[Login] Đang chuẩn bị giải mã...");
         const saltBuffer = Uint8Array.from(atob(salt), (c) => c.charCodeAt(0));
         const ivBuffer = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));
 
-        // 5. Tạo key từ password
-        console.log("[Login] Deriving key from password...");
+        console.log("[Login] Đang tạo lại khóa AES từ mật khẩu...");
+        console.log("[Login] Thông số PBKDF2:", {
+          iterations: "100,000",
+          hashFunction: "SHA-256",
+          derivedKeyLength: "256 bits",
+          saltHex: Array.from(saltBuffer)
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join(""),
+        });
+
         const passwordKey = await window.crypto.subtle.importKey(
           "raw",
           new TextEncoder().encode(loginInfo.password),
@@ -272,10 +289,9 @@ export const AuthContextProvider = ({ children }) => {
           false,
           ["decrypt"]
         );
-        console.log("[Login] Key derivation completed");
+        console.log("[Login] Đã tạo lại thành công khóa AES");
 
-        // 6. Giải mã private key
-        console.log("[Login] Decrypting private key...");
+        console.log("[Login] Đang giải mã private key...");
         const encryptedBytes = Uint8Array.from(atob(encryptedPrivateKey), (c) =>
           c.charCodeAt(0)
         );
@@ -290,20 +306,17 @@ export const AuthContextProvider = ({ children }) => {
         );
 
         const decryptedPrivateKey = new TextDecoder().decode(decryptedBuffer);
-        console.log("[Login] Private key decrypted successfully:", {
-          keyLength: decryptedPrivateKey.length,
+        console.log("[Login] Kết quả giải mã:", {
+          encryptedSize: encryptedBytes.length + " bytes",
+          decryptedSize: decryptedBuffer.byteLength + " bytes",
           isValidPEM: decryptedPrivateKey.includes("BEGIN PRIVATE KEY"),
+          keyPreview: decryptedPrivateKey.substring(0, 64) + "...",
         });
 
-        if (!decryptedPrivateKey) {
-          throw new Error("Không giải mã được khóa riêng tư");
-        }
-
-        // 7. Hoàn tất đăng nhập
         setPrivateKey(decryptedPrivateKey);
-        console.log("[Login] Login completed successfully");
+        console.log("[Login] ===== HOÀN TẤT ĐĂNG NHẬP =====");
       } catch (error) {
-        console.error("[Login] Critical error during login:", {
+        console.error("[Login] Lỗi nghiêm trọng:", {
           error: error.message,
           stack: error.stack,
         });
@@ -317,14 +330,11 @@ export const AuthContextProvider = ({ children }) => {
 
   const logoutUser = useCallback(() => {
     try {
-      // Xóa thông tin người dùng trong localStorage
       localStorage.removeItem("User");
-
-      // Xóa state và context liên quan
       setPrivateKey(null);
       setUser(null);
     } catch (error) {
-      console.error("Logout failed:", error);
+      console.error("[Logout] Lỗi:", error);
     }
   }, []);
 
@@ -350,5 +360,3 @@ export const AuthContextProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
-// export default AuthContextProvider;

@@ -31,3 +31,9 @@ export function pemToArrayBuffer(pem) {
 export function arrayBufferToBase64(buffer) {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)));
 }
+
+export function convertToPem(buffer, label) {
+  const base64 = window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const formatted = base64.match(/.{1,64}/g).join("\n");
+  return `-----BEGIN ${label}-----\n${formatted}\n-----END ${label}-----`;
+}
