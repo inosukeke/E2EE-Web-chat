@@ -9,7 +9,7 @@ export function generateAESKey() {
   return window.crypto.getRandomValues(new Uint8Array(32)); // 32 bytes = 256 bits
 }
 
-// Mã hóa nội dung bằng AES (CTR mode hoặc GCM an toàn hơn CBC)
+// Mã hóa nội dung bằng AES (GCM an toàn hơn CBC)
 export async function encryptMessageAES(message, aesKey) {
   const iv = window.crypto.getRandomValues(new Uint8Array(12)); // IV 96-bit
   const encoded = new TextEncoder().encode(message);
