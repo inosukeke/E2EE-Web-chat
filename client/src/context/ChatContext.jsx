@@ -373,12 +373,10 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
 
         // 2. Tạo AES key
         console.log("[Send] Đang tạo khóa AES...");
-        const aesKey = generateAESKey();
+        const aesKey = await generateAESKey();
         // Convert AES key to hex để hiển thị
-        const aesKeyArray = new Uint8Array(
-          await crypto.subtle.exportKey("raw", aesKey)
-        );
-        const aesKeyHex = Array.from(aesKeyArray)
+        const exportedKey = await crypto.subtle.exportKey("raw", aesKey);
+        const aesKeyHex = Array.from(new Uint8Array(exportedKey))
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
         console.log("[Send] Khóa AES:", {
@@ -391,7 +389,7 @@ export const ChatContextProvider = ({ children, user, privateKey }) => {
         const { ciphertext, iv } = await encryptMessageAES(textMessage, aesKey);
         console.log("[Send] Dữ liệu đã mã hóa:", {
           ciphertext: ciphertext,
-          iv: Array.from(new Uint8Array(iv))
+          iv: Array.from(new Uint8Array(base64ToArrayBuffer(iv)))
             .map((b) => b.toString(16).padStart(2, "0"))
             .join(""),
         });
